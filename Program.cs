@@ -71,7 +71,7 @@ class BlumBot
         }
 
         Console.WriteLine($"[{timestamp}] [{status}] {message}");
-        Console.ResetColor();  // Reset warna ke default setelah log
+        Console.ResetColor();  
     }
 
     static async Task<List<string>> ReadQueriesFromFile(string filePath)
@@ -149,7 +149,7 @@ class BlumBot
         DisplayWatermark();
         Log($"Processing account with query: {query}", "INFO");
 
-        var token = await GetToken(query, referralToken);  // Kirim query langsung
+        var token = await GetToken(query, referralToken); 
         if (token == null)
         {
             Log("Token is undefined! Skipping this account.", "ERROR");
@@ -433,7 +433,7 @@ class BlumBot
 
             var response = await client.SendAsync(request);
             var result = JObject.Parse(await response.Content.ReadAsStringAsync());
-            var playPasses = result["playPasses"]?.ToObject<int>() ?? 0; // Jumlah tiket (game chances)
+            var playPasses = result["playPasses"]?.ToObject<int>() ?? 0;
 
             Log($"You have {playPasses} game chances available.", "INFO");
             return playPasses;
