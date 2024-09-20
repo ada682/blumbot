@@ -1,0 +1,1 @@
+query_id=AAEOF69CAAAAAA4Xr0KJkhQX&user=%7B%22id%22%3A1118770958%2C%22first_name%22%3A%22zyungzao%22%2C%22last_name%22%3A%22%22%2C%22username%22%3A%22slyntherinnn%22%2C%22language_code%22%3A%22en%22%2C%22is_premium%22%3Atrue%2C%22allows_write_to_pm%22%3Atrue%7D&auth_date=1726842708&hash=71b400e88132ef61dfe0bdcfb3ca3208b976e4af6f76825e27ad021e9b0ec02b
