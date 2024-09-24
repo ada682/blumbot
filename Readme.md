@@ -74,7 +74,7 @@ This project is [MIT](https://github.com/ada682/blumbot/blob/main/LICENSE) licen
 
 ## 💬 Contact
 
-Your Name - [@zadkaaa](https://twitter.com/zadkaaa)
+slyntherinnn - [@zadkaaa](https://twitter.com/zadkaaa)
 
 Project Link: [https://github.com/ada682/blumbot](https://github.com/ada682/blumbot)
 
