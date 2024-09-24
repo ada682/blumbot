@@ -1,7 +1,6 @@
 # BlumBot 🤖
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-
 <p align="center">
   <img src="https://raw.githubusercontent.com/ada682/blumbot/master/blumbot_logo.gif" alt="BlumBot Logo">
 </p>
