@@ -32,7 +32,7 @@ BlumBot is an advanced multi-account airdrop system designed to automate interac
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/blumbot.git
+   git clone https://github.com/ada682/blumbot.git
    cd blumbot
    ```
 
