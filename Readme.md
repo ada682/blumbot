@@ -19,8 +19,8 @@ BlumBot is an advanced multi-account airdrop system designed to automate interac
 
 - Multi-account support
 - Automated task completion
-- Reward claiming
-- Game point management
+- Reward claiming - Daily claim - start farm
+- Game point play with 3 batch
 - Detailed logging
 
 ## 📋 Prerequisites
