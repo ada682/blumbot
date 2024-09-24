@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 class BlumBot
 {
     private static readonly HttpClient client = new HttpClient();
-    private const int API_TIMEOUT = 30000; // 30 seconds
+    private const int API_TIMEOUT = 30000; 
 
     static async Task Main(string[] args)
     {
@@ -421,19 +421,20 @@ static async Task CompleteTasks(string token)
             Log($"Verifying task: {title} with keyword: {keyword}", "INFO");
             var request = new HttpRequestMessage(HttpMethod.Post, $"https://earn-domain.blum.codes/api/v1/tasks/{taskId}/validate");
             request.Headers.Add("Authorization", token);
-            request.Content = new StringContent(JsonConvert.SerializeObject(new { keyword }), Encoding.UTF8, "application/json");
+            var content = new StringContent(JsonConvert.SerializeObject(new { keyword }), Encoding.UTF8, "application/json");
+            request.Content = content;
 
             var response = await client.SendAsync(request);
-            var content = await response.Content.ReadAsStringAsync();
+            var responseContent = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
             {
                 Log($"Task \"{title}\" verified successfully with keyword: {keyword}", "SUCCESS");
-                return JObject.Parse(content);
+                return JObject.Parse(responseContent);
             }
             else
             {
-                var errorObj = JObject.Parse(content);
+                var errorObj = JObject.Parse(responseContent);
                 Log($"Error verifying task \"{title}\": {errorObj["message"]}", "ERROR");
                 return null;
             }
@@ -489,10 +490,11 @@ static async Task CompleteTasks(string token)
         {
             var request = new HttpRequestMessage(HttpMethod.Post, $"https://earn-domain.blum.codes/api/v1/tasks/{taskId}/submit");
             request.Headers.Add("Authorization", token);
-            request.Content = new StringContent(JsonConvert.SerializeObject(new { answer }), Encoding.UTF8, "application/json");
+            var content = new StringContent(JsonConvert.SerializeObject(new { answer }), Encoding.UTF8, "application/json");
+            request.Content = content;
 
             var response = await client.SendAsync(request);
-            var content = await response.Content.ReadAsStringAsync();
+            var responseContent = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
             {
@@ -500,7 +502,7 @@ static async Task CompleteTasks(string token)
             }
             else
             {
-                var errorObj = JObject.Parse(content);
+                var errorObj = JObject.Parse(responseContent);
                 Log($"Error submitting answer for task {taskId}: {errorObj["message"]}", "ERROR");
             }
         }
