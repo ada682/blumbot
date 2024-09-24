@@ -3,14 +3,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 class BlumBot
 {
     private static readonly HttpClient client = new HttpClient();
-    private const int API_TIMEOUT = 30000; 
+    private const int API_TIMEOUT = 30000;
+    private const int RETRY_LIMIT = 3;  
 
     static async Task Main(string[] args)
     {
@@ -112,39 +115,47 @@ class BlumBot
 
     static async Task<string> GetToken(string query, string referralToken)
     {
-        try
+        int attempts = 0;
+        while (attempts < RETRY_LIMIT)
         {
-            var data = new JObject
+            try
             {
-                { "query", query },
-                { "referralToken", referralToken }
-            };
-
-            var response = await client.PostAsync(
-                "https://user-domain.blum.codes/api/v1/auth/provider/PROVIDER_TELEGRAM_MINI_APP",
-                new StringContent(data.ToString(), System.Text.Encoding.UTF8, "application/json")
-            );
-
-            if (response.IsSuccessStatusCode)
-            {
-                var result = JObject.Parse(await response.Content.ReadAsStringAsync());
-                var token = result["token"]?["access"]?.ToString();
-
-                if (!string.IsNullOrEmpty(token))
+                var data = new JObject
                 {
-                    Log("Token retrieved successfully", "SUCCESS");
-                    return $"Bearer {token}";
+                    { "query", query },
+                    { "referralToken", referralToken }
+                };
+
+                var response = await client.PostAsync(
+                    "https://user-domain.blum.codes/api/v1/auth/provider/PROVIDER_TELEGRAM_MINI_APP",
+                    new StringContent(data.ToString(), System.Text.Encoding.UTF8, "application/json")
+                );
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = JObject.Parse(await response.Content.ReadAsStringAsync());
+                    var token = result["token"]?["access"]?.ToString();
+
+                    if (!string.IsNullOrEmpty(token))
+                    {
+                        Log("Token retrieved successfully", "SUCCESS");
+                        return $"Bearer {token}";
+                    }
                 }
+
+                Log("Failed to retrieve a valid token.", "ERROR");
+            }
+            catch (Exception ex)
+            {
+                Log($"Error fetching token: {ex.Message}", "ERROR");
             }
 
-            Log("Failed to retrieve a valid token.", "ERROR");
-            return null;
+            attempts++;
+            Log($"Retrying to get token... Attempt {attempts}/{RETRY_LIMIT}", "WARNING");
+            await Task.Delay(2000); 
         }
-        catch (Exception ex)
-        {
-            Log($"Error fetching token: {ex.Message}", "ERROR");
-            return null;
-        }
+
+        return null;  
     }
 
     static async Task ProcessAccount(string query, string referralToken)
@@ -155,19 +166,42 @@ class BlumBot
         var token = await GetToken(query, referralToken); 
         if (token == null)
         {
-            Log("Token is undefined! Skipping this account.", "ERROR");
+            Log("Token is undefined after retries! Skipping this account.", "ERROR");
             return;
         }
 
-        Log("Token retrieved successfully.", "SUCCESS");
-
-        await ClaimFarmReward(token);
-        await StartFarmingSession(token);
-        await ClaimDailyReward(token);
-        await CompleteTasks(token);
-        await ClaimGamePoints(token);
+        await RetryAsync(() => ClaimFarmReward(token), "Claiming farm reward");
+        await RetryAsync(() => StartFarmingSession(token), "Starting farming session");
+        await RetryAsync(() => ClaimDailyReward(token), "Claiming daily reward");
+        await RetryAsync(() => CompleteTasks(token), "Completing tasks");
+        await RetryAsync(() => ClaimGamePoints(token), "Claiming game points");
 
         Log($"All processes completed for query: {query}", "SUCCESS");
+    }
+
+    static async Task RetryAsync(Func<Task> action, string actionDescription)
+    {
+        int attempts = 0;
+        while (attempts < RETRY_LIMIT)
+        {
+            try
+            {
+                await action();
+                break;  
+            }
+            catch (Exception ex)
+            {
+                attempts++;
+                Log($"Error during {actionDescription}: {ex.Message}. Attempt {attempts}/{RETRY_LIMIT}", "ERROR");
+                if (attempts >= RETRY_LIMIT)
+                {
+                    Log($"{actionDescription} failed after {RETRY_LIMIT} attempts. Skipping...", "ERROR");
+                    break;
+                }
+
+                await Task.Delay(2000);  
+            }
+        }
     }
 
     static async Task ClaimFarmReward(string token)
@@ -419,10 +453,14 @@ static async Task CompleteTasks(string token)
         try
         {
             Log($"Verifying task: {title} with keyword: {keyword}", "INFO");
+
             var request = new HttpRequestMessage(HttpMethod.Post, $"https://earn-domain.blum.codes/api/v1/tasks/{taskId}/validate");
             request.Headers.Add("Authorization", token);
+
             var content = new StringContent(JsonConvert.SerializeObject(new { keyword }), Encoding.UTF8, "application/json");
+
             request.Content = content;
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
             var response = await client.SendAsync(request);
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -490,8 +528,11 @@ static async Task CompleteTasks(string token)
         {
             var request = new HttpRequestMessage(HttpMethod.Post, $"https://earn-domain.blum.codes/api/v1/tasks/{taskId}/submit");
             request.Headers.Add("Authorization", token);
+
             var content = new StringContent(JsonConvert.SerializeObject(new { answer }), Encoding.UTF8, "application/json");
+
             request.Content = content;
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
             var response = await client.SendAsync(request);
             var responseContent = await response.Content.ReadAsStringAsync();
