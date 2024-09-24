@@ -39,7 +39,7 @@ BlumBot is an advanced multi-account airdrop system designed to automate interac
 
 ## ⚙️ Configuration
 
-1. Create a `query.txt` file in the `bin/Debug/net8.0/` directory.
+1. Copy a `query.txt` file in the `directory` to `bin/Debug/net8.0/` directory.
 2. Add your queries to the `query.txt` file, one per line.
 
 ## 🏃‍♂️ Running BlumBot
