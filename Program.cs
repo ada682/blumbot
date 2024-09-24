@@ -1,13 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using System.Collections.Generic;
 
 class BlumBot
 {
     private static readonly HttpClient client = new HttpClient();
+    private const int API_TIMEOUT = 30000; // 30 seconds
 
     static async Task Main(string[] args)
     {
