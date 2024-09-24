@@ -74,7 +74,7 @@ Contributions, issues, and feature requests are welcome! Feel free to check [iss
 
 ## 📜 License
 
-This project is [MIT](https://choosealicense.com/licenses/mit/) licensed.
+This project is [MIT](https://github.com/ada682/blumbot/blob/main/LICENSE) licensed.
 
 ## 💬 Contact
 
