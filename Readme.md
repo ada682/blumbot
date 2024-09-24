@@ -30,11 +30,7 @@ BlumBot is an advanced multi-account airdrop system designed to automate interac
 
 ## 🛠️ Installation
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/ada682/blumbot.git
-   cd blumbot
-   ```
+1. Download zip
 
 2. Build the project:
    ```
