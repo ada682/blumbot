@@ -231,38 +231,92 @@ class BlumBot
         }
     }
 
-    static async Task CompleteTasks(string token)
+static async Task CompleteTasks(string token)
     {
         try
         {
             Log("Fetching tasks and auto completing them...", "INFO");
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://earn-domain.blum.codes/api/v1/tasks");
-            request.Headers.Add("Authorization", token);
+            var tasks = await GetTasks(token);
 
-            var response = await client.SendAsync(request);
-            var tasks = JArray.Parse(await response.Content.ReadAsStringAsync());
+            var notStartedTasks = tasks.Where(t => t["status"]?.ToString() == "NOT_STARTED").ToList();
+            var readyForVerifyTasks = tasks.Where(t => t["status"]?.ToString() == "READY_FOR_VERIFY").ToList();
+            var inProgressTasks = tasks.Where(t => t["status"]?.ToString() == "IN_PROGRESS").ToList();
 
-            foreach (var task in tasks)
+            Log($"Not started tasks: {notStartedTasks.Count}", "INFO");
+            Log($"Ready for verify tasks: {readyForVerifyTasks.Count}", "INFO");
+            Log($"In progress tasks: {inProgressTasks.Count}", "INFO");
+
+            foreach (var task in notStartedTasks)
             {
-                string taskStatus = task["status"]?.ToString();
                 string taskTitle = task["title"]?.ToString();
                 string taskId = task["id"]?.ToString();
 
-                Log($"Task: {taskTitle}, Status: {taskStatus}, ID: {taskId}", "INFO");
-
-                if (taskStatus == "NOT_STARTED")
+                if (taskTitle == "Farm" || taskTitle == "Invite")
                 {
-                    await StartTask(token, taskId, taskTitle);
+                    Log($"Skipping task: {taskTitle}", "WARNING");
+                    continue;
+                }
+
+                var startResult = await StartTask(token, taskId, taskTitle);
+                if (startResult != null && startResult["alreadyStarted"]?.ToObject<bool>() == true)
+                {
+                    Log($"Task \"{taskTitle}\" was already started", "WARNING");
+                }
+                else
+                {
                     Log($"Started task: {taskTitle}", "SUCCESS");
                 }
 
-                if (taskStatus == "READY_FOR_VERIFY")
+                await Task.Delay(5000);
+
+                if (predefinedAnswers.TryGetValue(taskTitle, out string answer))
                 {
-                    await VerifyTask(token, taskId, taskTitle);
-                    Log($"Verified task: {taskTitle}", "SUCCESS");
+                    await SubmitAnswer(token, taskId, answer);
+                    Log($"Submitted answer for task: {taskTitle}", "SUCCESS");
+                }
+            }
+
+            foreach (var task in readyForVerifyTasks)
+            {
+                string taskTitle = task["title"]?.ToString();
+                string taskId = task["id"]?.ToString();
+
+                if (predefinedAnswers.TryGetValue(taskTitle, out string keyword))
+                {
+                    Log($"Validating task \"{taskTitle}\" with keyword: \"{keyword}\"", "INFO");
+                    var verifyResult = await VerifyTask(token, taskId, taskTitle, keyword);
+                    if (verifyResult != null)
+                    {
+                        Log($"Task \"{taskTitle}\" verified successfully.", "SUCCESS");
+                    }
+                    else
+                    {
+                        Log($"Task \"{taskTitle}\" did not return a valid result.", "WARNING");
+                    }
+                }
+                else
+                {
+                    Log($"No keyword found for task: {taskTitle}", "WARNING");
                 }
 
-                await ClaimTaskReward(token, taskId, taskTitle);
+                await Task.Delay(5000);
+            }
+
+            foreach (var task in notStartedTasks.Concat(readyForVerifyTasks).Concat(inProgressTasks))
+            {
+                string taskTitle = task["title"]?.ToString();
+                string taskId = task["id"]?.ToString();
+
+                var claimResult = await ClaimTaskReward(token, taskId, taskTitle);
+                if (claimResult != null)
+                {
+                    Log($"Claimed reward for task: {taskTitle}", "SUCCESS");
+                }
+                else
+                {
+                    Log($"Unable to claim reward for task: {taskTitle}. It may not be ready yet.", "WARNING");
+                }
+                await Task.Delay(2000);
             }
         }
         catch (Exception ex)
@@ -271,7 +325,54 @@ class BlumBot
         }
     }
 
-    static async Task StartTask(string token, string taskId, string title)
+    static async Task<List<JObject>> GetTasks(string token)
+    {
+        try
+        {
+            Log("Fetching tasks...", "INFO");
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://earn-domain.blum.codes/api/v1/tasks");
+            request.Headers.Add("Authorization", token);
+
+            var response = await client.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JArray.Parse(content);
+
+            var allTasks = new List<JObject>();
+
+            foreach (var section in result)
+            {
+                if (section["tasks"] is JArray sectionTasks)
+                {
+                    allTasks.AddRange(sectionTasks.Cast<JObject>());
+                }
+
+                if (section["subSections"] is JArray subSections)
+                {
+                    foreach (var subSection in subSections)
+                    {
+                        if (subSection["tasks"] is JArray subSectionTasks)
+                        {
+                            allTasks.AddRange(subSectionTasks.Cast<JObject>());
+                        }
+                    }
+                }
+            }
+
+            foreach (var task in allTasks)
+            {
+                Log($"Task: {task["title"]}, Status: {task["status"]}, ID: {task["id"]}", "INFO");
+            }
+
+            return allTasks;
+        }
+        catch (Exception ex)
+        {
+            Log($"Error fetching tasks: {ex.Message}", "ERROR");
+            return new List<JObject>();
+        }
+    }
+
+    static async Task<JObject> StartTask(string token, string taskId, string title)
     {
         try
         {
@@ -279,32 +380,69 @@ class BlumBot
             var request = new HttpRequestMessage(HttpMethod.Post, $"https://earn-domain.blum.codes/api/v1/tasks/{taskId}/start");
             request.Headers.Add("Authorization", token);
 
-            await client.SendAsync(request);
-            Log($"Task \"{title}\" started successfully.", "SUCCESS");
+            var response = await client.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                Log($"Task \"{title}\" started successfully.", "SUCCESS");
+                return JObject.Parse(content);
+            }
+            else
+            {
+                var errorObj = JObject.Parse(content);
+                string errorMessage = errorObj["message"]?.ToString();
+                if (response.StatusCode == System.Net.HttpStatusCode.BadRequest && errorMessage?.Contains("already started") == true)
+                {
+                    Log($"Task \"{title}\" was already started", "WARNING");
+                    return new JObject { { "alreadyStarted", true } };
+                }
+                else
+                {
+                    Log($"Error starting task \"{title}\": {errorMessage}", "ERROR");
+                    return null;
+                }
+            }
         }
         catch (Exception ex)
         {
-            Log($"Error starting task \"{title}\": {ex.Message}", "ERROR");
+            Log($"Unexpected error starting task \"{title}\": {ex.Message}", "ERROR");
+            return null;
         }
     }
 
-    static async Task VerifyTask(string token, string taskId, string title)
+    static async Task<JObject> VerifyTask(string token, string taskId, string title, string keyword)
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Post, $"https://earn-domain.blum.codes/api/v1/tasks/{taskId}/verify");
+            Log($"Verifying task: {title} with keyword: {keyword}", "INFO");
+            var request = new HttpRequestMessage(HttpMethod.Post, $"https://earn-domain.blum.codes/api/v1/tasks/{taskId}/validate");
             request.Headers.Add("Authorization", token);
+            request.Content = new StringContent(JsonConvert.SerializeObject(new { keyword }), Encoding.UTF8, "application/json");
 
-            await client.SendAsync(request);
-            Log($"Task \"{title}\" verified successfully.", "SUCCESS");
+            var response = await client.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                Log($"Task \"{title}\" verified successfully with keyword: {keyword}", "SUCCESS");
+                return JObject.Parse(content);
+            }
+            else
+            {
+                var errorObj = JObject.Parse(content);
+                Log($"Error verifying task \"{title}\": {errorObj["message"]}", "ERROR");
+                return null;
+            }
         }
         catch (Exception ex)
         {
-            Log($"Error verifying task \"{title}\": {ex.Message}", "ERROR");
+            Log($"Unexpected error verifying task \"{title}\": {ex.Message}", "ERROR");
+            return null;
         }
     }
 
-    static async Task ClaimTaskReward(string token, string taskId, string title)
+    static async Task<JObject> ClaimTaskReward(string token, string taskId, string title)
     {
         try
         {
@@ -312,14 +450,73 @@ class BlumBot
             var request = new HttpRequestMessage(HttpMethod.Post, $"https://earn-domain.blum.codes/api/v1/tasks/{taskId}/claim");
             request.Headers.Add("Authorization", token);
 
-            await client.SendAsync(request);
-            Log($"Reward for task \"{title}\" claimed successfully.", "SUCCESS");
+            var response = await client.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                Log($"Reward for task \"{title}\" claimed successfully.", "SUCCESS");
+                return JObject.Parse(content);
+            }
+            else
+            {
+                var errorObj = JObject.Parse(content);
+                string errorMessage = errorObj["message"]?.ToString();
+                if (errorMessage == "Task is not done")
+                {
+                    Log($"Task \"{title}\" is not ready for claim yet.", "WARNING");
+                }
+                else
+                {
+                    Log($"Error claiming reward for task \"{title}\": {errorMessage}", "ERROR");
+                }
+                return null;
+            }
         }
         catch (Exception ex)
         {
             Log($"Error claiming reward for task \"{title}\": {ex.Message}", "ERROR");
+            return null;
         }
     }
+
+    static async Task SubmitAnswer(string token, string taskId, string answer)
+    {
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"https://earn-domain.blum.codes/api/v1/tasks/{taskId}/submit");
+            request.Headers.Add("Authorization", token);
+            request.Content = new StringContent(JsonConvert.SerializeObject(new { answer }), Encoding.UTF8, "application/json");
+
+            var response = await client.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                Log($"Answer submitted successfully for task {taskId}", "SUCCESS");
+            }
+            else
+            {
+                var errorObj = JObject.Parse(content);
+                Log($"Error submitting answer for task {taskId}: {errorObj["message"]}", "ERROR");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Unexpected error submitting answer for task {taskId}: {ex.Message}", "ERROR");
+        }
+    }
+
+    private static Dictionary<string, string> predefinedAnswers = new Dictionary<string, string>
+    {
+        { "What Are AMMs?", "CRYPTOSMART" },
+        { "Say No to Rug Pull!", "SUPERBLUM" },
+        { "What are Telegram Mini Apps?", "CRYPTOBLUM" },
+        { "Navigating Crypto", "HEYBLUM" },
+        { "Secure your Crypto!", "BEST PROJECT EVER" },
+        { "Forks Explained", "GO GET" },
+        { "How to Analyze Crypto?", "VALUE" }
+    };
 
     static async Task ClaimGamePoints(string token)
     {
