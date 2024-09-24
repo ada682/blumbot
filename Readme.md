@@ -68,12 +68,6 @@ Navigate to `Bin/Debug/net8.0/` and run:
 
 BlumBot provides detailed logging of its operations. Check the console output for real-time information on tasks, rewards, and any errors encountered.
 
-## 📊 Project Status
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/ada682/blumbot/master/project_status.svg" alt="Project Status">
-</p>
-
 ## 🤝 Contributing
 
 Contributions, issues, and feature requests are welcome! Feel free to check [issues page](https://github.com/ada682/blumbot/issues).
